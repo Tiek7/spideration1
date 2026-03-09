@@ -9,13 +9,19 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "start": "node server/index.js",
     "preview": "vite preview"
   },
   "devDependencies": {
     "vite": "^7.3.1"
   },
   "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
+    "telegraf": "^4.16.3",
     "three": "^0.183.2"
   }
 }
