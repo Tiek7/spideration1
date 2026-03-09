@@ -220,12 +220,13 @@ bot.on('text', (ctx) => {
     });
 });
 
-bot.launch().then(() => console.log('Telegram Bot running...'));
+bot.launch()
+    .then(() => console.log('Telegram Bot running...'))
+    .catch((err) => console.error('Telegram bot failed to start (maybe running elsewhere?):', err.message || err));
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`Spideration backend listening on port ${PORT}`);
 });
-
 process.once('SIGINT', () => {
     bot.stop('SIGINT');
     server.close();
