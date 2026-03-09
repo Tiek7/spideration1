@@ -18,7 +18,8 @@ app.use(cors());
 // Serve the built Vite frontend
 const distPath = path.resolve(__dirname, '..', 'dist');
 app.use(express.static(distPath));
-app.get('/(.*)', (req, res) => {
+// Serve index.html for all other routes (SPA fallback) — works on Express 5.x
+app.use((req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
 });
 
