@@ -49,3 +49,4 @@ https://spideration-production.up.railway.app
 - **Frontend** (Vite): được build ra thư mục `dist/`
 - **Backend** (Express + Socket.IO): chạy từ `server/` và serve cả `dist/`
 - **Telegram Bot**: chạy chung trong backend server
+# spideration
