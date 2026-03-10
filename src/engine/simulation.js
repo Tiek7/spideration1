@@ -27,6 +27,10 @@ export class SimulationEngine {
             taskAssign: [],
             weeklyReport: [],
             notification: [],
+            world_agent_move: [],
+            hire_employee: [],
+            fire_employee: [],
+            edit_employee: [],
         };
 
         this.intervals = [];
@@ -152,6 +156,13 @@ export class SimulationEngine {
         }
     }
 
+    // Called by ThreeRenderer when a character wanders, to sync to other clients
+    emitAgentMove(id, x, y) {
+        if (this.socket?.connected) {
+            this.socket.emit('agent_move', { id, x, y });
+        }
+    }
+
     start() {
         if (this.isRunning) return;
         this.isRunning = true;
@@ -220,6 +231,44 @@ export class SimulationEngine {
 
             this.socket.on('connect', () => {
                 this.emit('log', { level: 'INFO', message: 'Connected to Command Center (Telegram)' });
+            });
+
+            // ---- Realtime World Sync ----
+            this.socket.on('world_state', (state) => {
+                // Sync week from server on connect
+                if (state.weekNumber && state.weekNumber > this.weekNumber) {
+                    this.weekNumber = state.weekNumber;
+                    this.weekTimer = 0;
+                    this.emit('stats', this.stats);
+                }
+                // Apply agent positions from server (other clients' moves)
+                if (state.agentPositions) {
+                    for (const [id, pos] of Object.entries(state.agentPositions)) {
+                        this.emit('world_agent_move', { id, x: pos.x, y: pos.y });
+                    }
+                }
+            });
+
+            // Another client's character moved — relay to renderer
+            this.socket.on('agent_move', (data) => {
+                this.emit('world_agent_move', data);
+            });
+
+            // Another client's status changed — relay to renderer
+            this.socket.on('status_change', (data) => {
+                const emp = this.employees.find(e => e.id === data.id);
+                if (emp) {
+                    emp.status = data.status;
+                    this.emit('status', { employeeId: data.id, status: data.status });
+                }
+            });
+
+            // Server ticked the week
+            this.socket.on('week_tick', (data) => {
+                this.weekNumber = data.weekNumber;
+                this.weekTimer = 0;
+                this.emit('log', { level: 'INFO', message: `📅 Bắt đầu tuần ${data.weekNumber}` });
+                this.emit('stats', this.stats);
             });
 
             this.socket.on('add_task', (data) => {

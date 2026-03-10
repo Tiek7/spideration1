@@ -300,6 +300,10 @@ export class ThreeRenderer {
             moveProgress: 0,
             labelEl: this._createDOMElement('agent-label'),
             chatEl: this._createDOMElement('agent-chat'),
+            // Wandering
+            wanderTimer: Math.random() * 10 + 5,  // first wander in 5-15s
+            wanderBaseX: gridX,
+            wanderBaseY: gridY,
         };
 
         const mesh = this._createRobotMesh(emp.id);
@@ -584,8 +588,8 @@ export class ThreeRenderer {
                     mesh.position.set(agent.gridX, 0, agent.gridY);
                     mesh.position.y = 0;
 
-                    // Reset rotation if back at desk
-                    if (agent.status === 'working' || agent.status === 'coding') {
+                    // Sit down when back at desk/base
+                    if (agent.status === 'working' || agent.status === 'coding' || agent.status === 'online') {
                         mesh.rotation.y = 0;
                     }
                 } else {
@@ -593,16 +597,66 @@ export class ThreeRenderer {
                     agent.gridY = agent.startY + (agent.targetY - agent.startY) * agent.moveProgress;
                     mesh.position.set(agent.gridX, 0, agent.gridY);
 
-                    // Bounce walk
-                    mesh.position.y = Math.abs(Math.sin(agent.moveProgress * Math.PI * 6)) * 0.2;
+                    // Bounce walk: higher bounce while moving
+                    mesh.position.y = Math.abs(Math.sin(agent.moveProgress * Math.PI * 6)) * 0.25;
                 }
+
+                // Stand up during movement
+                if (mesh.userData.body) {
+                    mesh.userData.body.scale.y += (1.0 - mesh.userData.body.scale.y) * 0.2;
+                }
+
             } else {
-                // Idle / Typing animation
+                // ---- Idle/Desk behavior ----
                 mesh.position.y = 0;
-                if (agent.isTyping) {
+
+                // Head-bob when typing
+                if (agent.isTyping && mesh.userData.head) {
                     mesh.userData.head.rotation.x = Math.sin(this.time * 15) * 0.1;
-                } else {
-                    mesh.userData.head.rotation.x = Math.sin(this.time * 2 + id.charCodeAt(0)) * 0.05;
+                } else if (mesh.userData.head) {
+                    // Gentle idle head sway, unique per agent
+                    const phase = id.charCodeAt(0) * 0.7;
+                    const speed = 1.5 + (id.charCodeAt(1) || 0) % 3 * 0.4;
+                    mesh.userData.head.rotation.x = Math.sin(this.time * speed + phase) * 0.05;
+                    mesh.userData.head.rotation.z = Math.sin(this.time * speed * 0.7 + phase) * 0.03;
+                }
+
+                // Sit pose: squish body y slightly when working at desk
+                if (mesh.userData.body && (agent.status === 'working' || agent.status === 'coding' || agent.status === 'online')) {
+                    mesh.userData.body.scale.y += (0.85 - mesh.userData.body.scale.y) * 0.05;
+                } else if (mesh.userData.body) {
+                    mesh.userData.body.scale.y += (1.0 - mesh.userData.body.scale.y) * 0.05;
+                }
+
+                // ---- Wandering timer ----
+                const atDesk = agent.status === 'working' || agent.status === 'coding' || agent.status === 'online';
+                if (atDesk) {
+                    agent.wanderTimer = (agent.wanderTimer || 10) - dt;
+                    if (agent.wanderTimer <= 0) {
+                        // Pick a random spot near their base position
+                        const wx = (agent.wanderBaseX || agent.gridX) + (Math.random() - 0.5) * 2.5;
+                        const wy = (agent.wanderBaseY || agent.gridY) + (Math.random() - 0.5) * 2.5;
+                        const dx = wx - agent.gridX;
+                        const dy = wy - agent.gridY;
+
+                        agent.startX = agent.gridX;
+                        agent.startY = agent.gridY;
+                        agent.targetX = wx;
+                        agent.targetY = wy;
+                        agent.moving = true;
+                        agent.moveProgress = 0;
+
+                        // Face walk direction
+                        if (mesh) mesh.rotation.y = Math.atan2(dx, dy);
+
+                        // Reset timer: 5-15 seconds until next wander
+                        agent.wanderTimer = Math.random() * 10 + 5;
+
+                        // Emit to socket for sync
+                        if (this._onAgentWander) {
+                            this._onAgentWander(id, wx, wy);
+                        }
+                    }
                 }
             }
 

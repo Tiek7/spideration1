@@ -94,6 +94,31 @@ function init() {
         updateTeamBar(engine.employees);
     });
 
+    // ---- Realtime wandering sync ----
+    // When this tab's renderer decides to make a character wander, emit to server
+    renderer._onAgentWander = (id, x, y) => {
+        engine.emitAgentMove(id, x, y);
+    };
+
+    // Apply position updates received from OTHER connected clients
+    engine.on('world_agent_move', (data) => {
+        const agent = renderer.agents[data.id];
+        if (!agent || agent.moving) return; // don't interrupt an active walk
+        // Trigger a smooth walk to the synced position
+        const dx = data.x - agent.gridX;
+        const dy = data.y - agent.gridY;
+        if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
+            agent.startX = agent.gridX;
+            agent.startY = agent.gridY;
+            agent.targetX = data.x;
+            agent.targetY = data.y;
+            agent.moving = true;
+            agent.moveProgress = 0;
+            const mesh = renderer.agentMeshes[data.id];
+            if (mesh) mesh.rotation.y = Math.atan2(dx, dy);
+        }
+    });
+
     // ---- Initialize HUD data ----
     updateStats(engine.stats, engine.getTaskSummary());
     updateTeamBar(engine.employees);

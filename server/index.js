@@ -31,11 +31,44 @@ const io = new Server(server, {
     }
 });
 
+// ---- World State (shared across all connected clients) ----
+const worldState = {
+    weekNumber: 1,
+    agentPositions: {},  // { empId: { x, y } }
+    agentStatuses: {},   // { empId: status }
+};
+
+// Week tick — advance every 60 seconds server-side
+setInterval(() => {
+    worldState.weekNumber++;
+    io.emit('week_tick', { weekNumber: worldState.weekNumber });
+    console.log(`[World] Week ${worldState.weekNumber}`);
+}, 60 * 1000);
+
 let connectedClients = 0;
 
 io.on('connection', (socket) => {
     connectedClients++;
     console.log(`Client connected. Total: ${connectedClients}`);
+
+    // Send current world snapshot to new client
+    socket.emit('world_state', worldState);
+
+    // Client reports a character moved (from wandering/status change)
+    socket.on('agent_move', (data) => {
+        // data: { id, x, y }
+        worldState.agentPositions[data.id] = { x: data.x, y: data.y };
+        // Relay to all OTHER clients
+        socket.broadcast.emit('agent_move', data);
+    });
+
+    // Client reports a status change
+    socket.on('status_change', (data) => {
+        // data: { id, status }
+        worldState.agentStatuses[data.id] = data.status;
+        socket.broadcast.emit('status_change', data);
+    });
+
     socket.on('disconnect', () => {
         connectedClients--;
         console.log(`Client disconnected. Total: ${connectedClients}`);
