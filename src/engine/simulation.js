@@ -163,6 +163,49 @@ export class SimulationEngine {
         }
     }
 
+    // ---- Excel Import ----
+    bulkAddTasks(parsedTasks) {
+        let added = 0;
+        for (const t of parsedTasks) {
+            const id = uid();
+            const task = {
+                id,
+                title: t.title,
+                assignee: t.assignee || this.employees[0],
+                createdAt: timestamp(),
+                progress: t.progress || 0,
+                deadline: t.deadline || this._generateDeadline(),
+                priority: t.priority || 'medium',
+                description: t.description || '',
+                checklist: [],
+                isUserTask: true,
+                createdBy: 'user',
+            };
+            const col = t.status || 'backlog';
+            if (this.tasks[col]) {
+                this.tasks[col].push(task);
+                added++;
+            }
+        }
+        this.emit('task', this.tasks);
+        this.emit('log', { level: 'SUCCESS', message: `📂 Import thành công ${added} công việc từ Excel` });
+        return added;
+    }
+
+    // ---- User Chat (Boss sends a message) ----
+    addUserMessage(text) {
+        if (!text?.trim()) return;
+        const msg = {
+            id: uid(),
+            employee: { id: 'boss', name: 'Boss', role: 'Quản lý', avatar: '👑' },
+            text: text.trim(),
+            time: timestamp(),
+            isUser: true,
+        };
+        this.messages.unshift(msg);
+        this.emit('chat', { type: 'message', message: msg });
+    }
+
     start() {
         if (this.isRunning) return;
         this.isRunning = true;

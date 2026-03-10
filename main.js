@@ -2,6 +2,7 @@ import './style.css';
 import { SimulationEngine } from './src/engine/simulation.js';
 import { ThreeRenderer } from './src/engine/three-renderer.js';
 import { AvatarCustomizer } from './src/engine/avatar-customizer.js';
+import { parseExcelToTasks } from './src/utils/excel-importer.js';
 import {
     createHUD, updateClock, updateWeekProgress, updateStats, updateTaskBoard,
     addChatMessage, addLogMessage, showNotification, showWeeklyReport,
@@ -144,6 +145,31 @@ function init() {
 
     document.getElementById('hud-add-task-btn')?.addEventListener('click', () => {
         showCreateTaskModal(null, engine);
+    });
+
+    // ---- Character scale slider ----
+    document.addEventListener('charScaleChange', (e) => {
+        renderer.setCharacterScale(e.detail.scale);
+    });
+
+    // ---- Excel import ----
+    document.addEventListener('excelImport', async (e) => {
+        try {
+            const tasks = await parseExcelToTasks(e.detail.file, engine.employees);
+            if (tasks.length === 0) {
+                engine.emit('log', { level: 'WARN', message: '📂 File Excel không có dữ liệu hợp lệ' });
+                return;
+            }
+            engine.bulkAddTasks(tasks);
+        } catch (err) {
+            console.error('Excel import error:', err);
+            engine.emit('log', { level: 'ERROR', message: `📂 Lỗi import: ${err.message}` });
+        }
+    });
+
+    // ---- Boss chat input ----
+    document.addEventListener('userChatSend', (e) => {
+        engine.addUserMessage(e.detail.text);
     });
 
     // ---- Clock & Week progress ----

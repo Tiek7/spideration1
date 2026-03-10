@@ -26,6 +26,7 @@ export function createHUD() {
         <div class="hud-live">
           <span class="hud-live-dot"></span> LIVE
         </div>
+        <button class="hud-settings-btn" id="hud-settings-btn" title="Cài đặt">⚙️</button>
       </div>
     </div>
 
@@ -72,7 +73,11 @@ export function createHUD() {
             <div class="hud-kanban-col" data-col="backlog">
               <div class="hud-kanban-header">
                 📥 Backlog <span class="hud-kanban-count" id="count-backlog">0</span>
-                <button class="hud-add-task-btn" id="hud-add-task-btn" title="Add Task">+</button>
+                <div class="hud-backlog-actions">
+                  <button class="hud-add-task-btn" id="hud-add-task-btn" title="Thêm task">+</button>
+                  <button class="hud-import-btn" id="hud-import-btn" title="Import Excel">📂</button>
+                  <input type="file" id="hud-excel-input" accept=".xlsx,.xls,.csv" style="display:none">
+                </div>
               </div>
               <div class="hud-kanban-cards" id="cards-backlog"></div>
             </div>
@@ -96,6 +101,10 @@ export function createHUD() {
         </div>
         <div class="hud-chat-panel" id="hud-chat-panel" style="display:none">
           <div class="hud-chat-messages" id="hud-chat-messages"></div>
+          <div class="hud-chat-input-bar">
+            <input class="hud-chat-input" id="hud-chat-input" type="text" placeholder="Nhắn tin với team... (Enter để gửi)" maxlength="200">
+            <button class="hud-chat-send" id="hud-chat-send">Gửi</button>
+          </div>
         </div>
         <div class="hud-log-panel" id="hud-log-panel" style="display:none">
           <div class="hud-log-messages" id="hud-log-messages"></div>
@@ -104,6 +113,23 @@ export function createHUD() {
     </div>
 
     <div class="hud-team-bar" id="hud-team-bar"></div>
+
+    <!-- Settings Panel (character scale) -->
+    <div class="hud-settings-panel" id="hud-settings-panel" style="display:none">
+      <div class="hud-settings-header">
+        <span>⚙️ Cài đặt</span>
+        <button class="hud-settings-close" id="hud-settings-close">✕</button>
+      </div>
+      <div class="hud-settings-row">
+        <label class="hud-settings-label">🧑 Kích thước nhân vật</label>
+        <div class="hud-slider-row">
+          <span class="hud-slider-val">Nhỏ</span>
+          <input type="range" id="char-scale-slider" min="0.5" max="2.0" step="0.05" value="1.0" class="hud-slider">
+          <span class="hud-slider-val">To</span>
+        </div>
+        <div class="hud-slider-current" id="char-scale-current">1.0×</div>
+      </div>
+    </div>
 
     <div class="hud-weekly-modal" id="hud-weekly-modal" style="display:none">
       <div class="hud-weekly-content" id="hud-weekly-content"></div>
@@ -125,27 +151,66 @@ export function createHUD() {
       tab.classList.add('active');
       const panel = tab.dataset.panel;
       document.getElementById('hud-tasks-panel').style.display = panel === 'tasks' ? 'block' : 'none';
-      document.getElementById('hud-chat-panel').style.display = panel === 'chat' ? 'block' : 'none';
+      // Chat panel uses class for flex display so input bar works
+      const chatPanel = document.getElementById('hud-chat-panel');
+      chatPanel.style.display = 'none';
+      chatPanel.classList.toggle('chat-active', panel === 'chat');
+      if (panel === 'chat') chatPanel.style.display = '';
       document.getElementById('hud-log-panel').style.display = panel === 'log' ? 'block' : 'none';
     });
   });
 
-  // Close agent panel
+  // Close agent panel + settings + scale slider + chat send + excel import
   setTimeout(() => {
-    const closeBtn = document.getElementById('hud-agent-close');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => {
-        document.getElementById('hud-agent-panel').style.display = 'none';
-      });
-    }
+    // Agent panel close
+    document.getElementById('hud-agent-close')?.addEventListener('click', () => {
+      document.getElementById('hud-agent-panel').style.display = 'none';
+    });
 
     // Modal Background Close
-    const modalBg = document.getElementById('hud-task-modal-bg');
-    if (modalBg) {
-      modalBg.addEventListener('click', () => {
-        document.getElementById('hud-task-modal').style.display = 'none';
-      });
+    document.getElementById('hud-task-modal-bg')?.addEventListener('click', () => {
+      document.getElementById('hud-task-modal').style.display = 'none';
+    });
+
+    // ⚙️ Settings panel toggle
+    document.getElementById('hud-settings-btn')?.addEventListener('click', () => {
+      const p = document.getElementById('hud-settings-panel');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+    });
+    document.getElementById('hud-settings-close')?.addEventListener('click', () => {
+      document.getElementById('hud-settings-panel').style.display = 'none';
+    });
+
+    // Scale slider → dispatch event so main.js can call renderer.setCharacterScale
+    document.getElementById('char-scale-slider')?.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      document.getElementById('char-scale-current').textContent = `${val.toFixed(2)}×`;
+      document.dispatchEvent(new CustomEvent('charScaleChange', { detail: { scale: val } }));
+    });
+
+    // Excel import
+    document.getElementById('hud-import-btn')?.addEventListener('click', () => {
+      document.getElementById('hud-excel-input')?.click();
+    });
+    document.getElementById('hud-excel-input')?.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        document.dispatchEvent(new CustomEvent('excelImport', { detail: { file } }));
+        e.target.value = ''; // reset so same file can be re-imported
+      }
+    });
+
+    // Chat input send (button + Enter key)
+    function sendChat() {
+      const input = document.getElementById('hud-chat-input');
+      if (!input?.value.trim()) return;
+      document.dispatchEvent(new CustomEvent('userChatSend', { detail: { text: input.value } }));
+      input.value = '';
     }
+    document.getElementById('hud-chat-send')?.addEventListener('click', sendChat);
+    document.getElementById('hud-chat-input')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendChat();
+    });
   }, 100);
 
   return hud;
@@ -234,17 +299,40 @@ export function updateTaskBoard(tasks) {
 export function addChatMessage(msg) {
   const container = document.getElementById('hud-chat-messages');
   if (!container) return;
+  if (!msg?.employee) return;
 
-  const color = ROBOT_COLORS[msg.employee.id]?.body || '#8B5CF6';
+  const isBoss = msg.employee.id === 'boss' || msg.isUser;
+  const color = isBoss ? '#06B6D4' : (ROBOT_COLORS[msg.employee.id]?.body || '#8B5CF6');
+  const avatar = msg.employee.avatar || '🤖';
+  const time = msg.time || msg.timestamp || '';
+  const text = (msg.text || '').length > 120 ? msg.text.substring(0, 117) + '…' : (msg.text || '');
+
   const div = document.createElement('div');
-  div.className = 'hud-chat-msg';
-  div.innerHTML = `
-    <span class="hud-chat-time">${msg.timestamp}</span>
-    <span class="hud-chat-name" style="color:${color}">${msg.employee.name}</span>
-    <span class="hud-chat-text">${msg.text.length > 100 ? msg.text.substring(0, 97) + '...' : msg.text}</span>
-  `;
+  div.className = `hud-chat-bubble ${isBoss ? 'hud-chat-bubble--boss' : ''}`;
+  div.innerHTML = isBoss
+    ? `
+      <div class="hud-chat-row hud-chat-row--right">
+        <div class="hud-chat-content hud-chat-content--right">
+          <div class="hud-chat-name" style="color:${color};text-align:right">${msg.employee.name}</div>
+          <div class="hud-chat-text-bubble hud-chat-text-bubble--boss">${text}</div>
+          <div class="hud-chat-time">${time}</div>
+        </div>
+        <div class="hud-chat-avatar" style="background:${color}22;border-color:${color}">${avatar}</div>
+      </div>
+    `
+    : `
+      <div class="hud-chat-row">
+        <div class="hud-chat-avatar" style="background:${color}22;border-color:${color}">${avatar}</div>
+        <div class="hud-chat-content">
+          <div class="hud-chat-name" style="color:${color}">${msg.employee.name} <span class="hud-chat-role">${msg.employee.role || ''}</span></div>
+          <div class="hud-chat-text-bubble">${text}</div>
+          <div class="hud-chat-time">${time}</div>
+        </div>
+      </div>
+    `;
+
   container.appendChild(div);
-  while (container.children.length > 30) container.removeChild(container.firstChild);
+  while (container.children.length > 50) container.removeChild(container.firstChild);
   container.scrollTop = container.scrollHeight;
 }
 

@@ -218,40 +218,119 @@ export class ThreeRenderer {
         }
     }
 
+    // --- Minecraft-style face canvas texture ---
+    _makeMinecraftFaceTexture(bodyColor, eyeColor) {
+        const size = 64;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Background skin color
+        ctx.fillStyle = bodyColor;
+        ctx.fillRect(0, 0, size, size);
+
+        // Pixel eyes (white sclera)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(14, 22, 10, 8);
+        ctx.fillRect(40, 22, 10, 8);
+
+        // Iris 
+        ctx.fillStyle = eyeColor;
+        ctx.fillRect(17, 24, 6, 6);
+        ctx.fillRect(43, 24, 6, 6);
+
+        // Pupil
+        ctx.fillStyle = '#000';
+        ctx.fillRect(19, 26, 3, 3);
+        ctx.fillRect(45, 26, 3, 3);
+
+        // Nose
+        ctx.fillStyle = '#00000033';
+        ctx.fillRect(29, 32, 6, 4);
+
+        // Mouth
+        ctx.fillStyle = '#00000066';
+        ctx.fillRect(20, 42, 4, 3);
+        ctx.fillRect(40, 42, 4, 3);
+        ctx.fillRect(24, 44, 16, 3);
+
+        return new THREE.CanvasTexture(canvas);
+    }
+
     _createRobotMesh(id) {
         const group = new THREE.Group();
-        const colors = ROBOT_COLORS[id] || { body: '#8B5CF6', accent: '#fff', eye: '#06B6D4' };
+        const colors = ROBOT_COLORS[id] || { body: '#8B5CF6', accent: '#a78bfa', eye: '#06B6D4' };
 
-        const bodyMat = new THREE.MeshStandardMaterial({ color: colors.body, roughness: 0.6 });
-        const accentMat = new THREE.MeshStandardMaterial({ color: colors.accent, roughness: 0.4 });
+        // Materials
+        const skinColor = colors.body;
+        const bodyMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.6 });
+        const shirtMat = new THREE.MeshStandardMaterial({ color: colors.accent, roughness: 0.5 });
+        const pantsMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(skinColor).multiplyScalar(0.5), roughness: 0.6 });
+        const faceTex = this._makeMinecraftFaceTexture(skinColor, colors.eye);
+        const headMats = [bodyMat, bodyMat, bodyMat, bodyMat,
+            new THREE.MeshStandardMaterial({ map: faceTex }), bodyMat];
 
-        // Body
-        const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), bodyMat);
-        body.position.y = 0.4;
-        group.add(body);
+        const S = this.charScale || 1.0; // respect global char scale
 
-        // Head
+        // --- HEAD ---
         const headGroup = new THREE.Group();
-        headGroup.position.y = 0.7;
-
-        const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.3, 0.35), bodyMat);
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), headMats);
         headGroup.add(head);
-
-        // Eye Visor
-        const visor = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.1, 0.05), new THREE.MeshBasicMaterial({ color: 0x1a1a2e }));
-        visor.position.set(0, 0, 0.18);
-        headGroup.add(visor);
-
-        // Glowing Eyes
-        const eye = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.05), new THREE.MeshBasicMaterial({ color: colors.eye }));
-        eye.position.set(0, 0, 0.21);
-        headGroup.add(eye);
-
+        headGroup.position.y = 1.25;
         group.add(headGroup);
 
-        group.userData = { head: headGroup, body: body, color: colors.body };
+        // --- BODY (shirt) ---
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.55, 0.25), shirtMat);
+        body.position.y = 0.825;
+        group.add(body);
+
+        // --- LEFT ARM ---
+        const leftArm = new THREE.Group();
+        const leftArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.2), shirtMat);
+        leftArmMesh.position.y = -0.25; // pivot at shoulder
+        leftArm.add(leftArmMesh);
+        leftArm.position.set(-0.325, 1.075, 0);
+        group.add(leftArm);
+
+        // --- RIGHT ARM ---
+        const rightArm = new THREE.Group();
+        const rightArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.2), shirtMat);
+        rightArmMesh.position.y = -0.25;
+        rightArm.add(rightArmMesh);
+        rightArm.position.set(0.325, 1.075, 0);
+        group.add(rightArm);
+
+        // --- LEFT LEG ---
+        const leftLeg = new THREE.Group();
+        const leftLegMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.2), pantsMat);
+        leftLegMesh.position.y = -0.25;
+        leftLeg.add(leftLegMesh);
+        leftLeg.position.set(-0.125, 0.55, 0);
+        group.add(leftLeg);
+
+        // --- RIGHT LEG ---
+        const rightLeg = new THREE.Group();
+        const rightLegMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.2), pantsMat);
+        rightLegMesh.position.y = -0.25;
+        rightLeg.add(rightLegMesh);
+        rightLeg.position.set(0.125, 0.55, 0);
+        group.add(rightLeg);
+
+        // Apply global char scale
+        group.scale.setScalar(S);
+
+        group.userData = { head: headGroup, body, leftArm, rightArm, leftLeg, rightLeg, color: colors.body };
         return group;
     }
+
+    // ---- Character scale API ----
+    setCharacterScale(scale) {
+        this.charScale = scale;
+        for (const mesh of Object.values(this.agentMeshes)) {
+            mesh.scale.setScalar(scale);
+        }
+    }
+
 
     // ---- API Methods ----
     initAgents(employees) {
@@ -598,10 +677,17 @@ export class ThreeRenderer {
                     mesh.position.set(agent.gridX, 0, agent.gridY);
 
                     // Bounce walk: higher bounce while moving
-                    mesh.position.y = Math.abs(Math.sin(agent.moveProgress * Math.PI * 6)) * 0.25;
+                    mesh.position.y = Math.abs(Math.sin(agent.moveProgress * Math.PI * 8)) * 0.1;
                 }
 
-                // Stand up during movement
+                // Arm & Leg swing during walk
+                const swing = Math.sin(agent.moveProgress * Math.PI * 8) * 0.7;
+                if (mesh.userData.leftArm) mesh.userData.leftArm.rotation.x = swing;
+                if (mesh.userData.rightArm) mesh.userData.rightArm.rotation.x = -swing;
+                if (mesh.userData.leftLeg) mesh.userData.leftLeg.rotation.x = -swing;
+                if (mesh.userData.rightLeg) mesh.userData.rightLeg.rotation.x = swing;
+
+                // Stand up (reset body scale) during movement
                 if (mesh.userData.body) {
                     mesh.userData.body.scale.y += (1.0 - mesh.userData.body.scale.y) * 0.2;
                 }
@@ -610,22 +696,27 @@ export class ThreeRenderer {
                 // ---- Idle/Desk behavior ----
                 mesh.position.y = 0;
 
+                // Return limbs to neutral gradually
+                if (mesh.userData.leftArm) mesh.userData.leftArm.rotation.x *= 0.85;
+                if (mesh.userData.rightArm) mesh.userData.rightArm.rotation.x *= 0.85;
+                if (mesh.userData.leftLeg) mesh.userData.leftLeg.rotation.x *= 0.85;
+                if (mesh.userData.rightLeg) mesh.userData.rightLeg.rotation.x *= 0.85;
+
                 // Head-bob when typing
                 if (agent.isTyping && mesh.userData.head) {
-                    mesh.userData.head.rotation.x = Math.sin(this.time * 15) * 0.1;
+                    mesh.userData.head.rotation.x = Math.sin(this.time * 15) * 0.12;
                 } else if (mesh.userData.head) {
                     // Gentle idle head sway, unique per agent
                     const phase = id.charCodeAt(0) * 0.7;
                     const speed = 1.5 + (id.charCodeAt(1) || 0) % 3 * 0.4;
-                    mesh.userData.head.rotation.x = Math.sin(this.time * speed + phase) * 0.05;
+                    mesh.userData.head.rotation.x = Math.sin(this.time * speed + phase) * 0.04;
                     mesh.userData.head.rotation.z = Math.sin(this.time * speed * 0.7 + phase) * 0.03;
                 }
 
-                // Sit pose: squish body y slightly when working at desk
-                if (mesh.userData.body && (agent.status === 'working' || agent.status === 'coding' || agent.status === 'online')) {
-                    mesh.userData.body.scale.y += (0.85 - mesh.userData.body.scale.y) * 0.05;
-                } else if (mesh.userData.body) {
-                    mesh.userData.body.scale.y += (1.0 - mesh.userData.body.scale.y) * 0.05;
+                // Idle breathing: slight arm raise
+                if (mesh.userData.leftArm) {
+                    mesh.userData.leftArm.rotation.z = -0.15 + Math.sin(this.time * 1.2 + id.charCodeAt(0)) * 0.05;
+                    mesh.userData.rightArm.rotation.z = 0.15 - Math.sin(this.time * 1.2 + id.charCodeAt(0)) * 0.05;
                 }
 
                 // ---- Wandering timer ----
